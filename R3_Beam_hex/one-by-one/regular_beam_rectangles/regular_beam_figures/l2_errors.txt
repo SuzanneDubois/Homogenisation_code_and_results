@@ -1,0 +1,4 @@
+# L2 errors of LSM with respect to FEM for R3_Beam_hex/one-by-one/regular_beam_rectangles/regular_beam
+# quantity      absolute_L2      relative_L2 (%)
+displacement    7.904842e-02     95.659285
+elongation      1.127761e-01     690.257653

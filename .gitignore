@@ -1,0 +1,24 @@
+# Python virtual environment (adapt the name if yours differs)
+venv/
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# LaTeX build files (if the repo also contains .tex files)
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Editor / OS
+.vscode/
+.DS_Store

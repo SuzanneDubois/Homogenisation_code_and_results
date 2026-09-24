@@ -1,0 +1,4 @@
+# L2 errors of LSM with respect to FEM for R3_Beam_hex/mean_calibration_identical/variable_section/variable_section_beam
+# quantity      absolute_L2      relative_L2 (%)
+displacement    1.307998e-02     42.461193
+elongation      3.527792e-03     57.443343

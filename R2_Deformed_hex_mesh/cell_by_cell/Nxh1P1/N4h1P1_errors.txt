@@ -1,0 +1,13 @@
+Isotropy error vs reference (E=1e+06, nu=0.25): 1.357435e-01
+Linearity errors per test:
+  x: 5.592742e-01
+  y: 3.185401e-01
+  z: 5.325341e-01
+  yz: 2.236949e-01
+  xz: 3.256571e-01
+  xy: 3.770676e-01
+  zy: 2.236949e-01
+  zx: 3.256571e-01
+  yx: 3.770676e-01
+  mean: 3.625764e-01
+  max: 5.592742e-01

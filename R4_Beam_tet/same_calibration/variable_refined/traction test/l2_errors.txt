@@ -1,0 +1,4 @@
+# L2 errors of LSM with respect to FEM for R4_Beam_tet/same_calibration/variable_refined/variable_section_beam
+# quantity      absolute_L2      relative_L2 (%)
+displacement    2.216085e-02     27.004408
+elongation      1.675318e-02     64.295266
