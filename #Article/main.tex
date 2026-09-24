@@ -67,7 +67,7 @@
 \title{%
   \vspace{-1.5em}% pull title closer to top margin
   \Large\bfseries
-  A Descriptive and Infoormative Title:\\
+  A Descriptive and Informative Title:\\
   Subtitle If Needed
 }
 
@@ -209,6 +209,7 @@ n_1^3 n_2 & n_1 n_2^3 & n_1 n_2 n_3^2 & n_1 n_2^2 n_3 & n_1^2 n_2 n_3 & \cellcol
 \end{array}
 \right)_{ij}
 \end{equation}
+
 \item Need a max of 15 different orientations to have a basis. \cite{Reck2017LatticeSM} does this with additional angular springs -> 21 component to for a base and can adapt the poisson.  
     \end{itemize}
 
@@ -217,10 +218,24 @@ n_1^3 n_2 & n_1 n_2^3 & n_1 n_2 n_3^2 & n_1 n_2^2 n_3 & n_1^2 n_2 n_3 & \cellcol
     Monter qu'on peut mettre la longueur des bonds en évidence et uniquement trvailler avec des orientations -> on résoud le meme systeme pour une cellule plus grande ou plus petite -> avec la proportion sur les longueurs et le volume représentatif.
 
 % ============================================================ undeformed cubic cell ============================================================
+
 \section{Undeformed cubic periodic cells}
     \begin{itemize}
         \item Face centered result
+    \begin {figure}[H]
+        \centering
+        \includegraphics[width=0.8\textwidth]{images/Undeformed_cubic_periodic/face_diagonal_periodic.pdf}
+        \caption{}
+        \label{fig:FCC homogenisation}
+    \end{figure}
+
         \item Body centered result (that is by the way the smallest amount of bonds we can have in a cubic symetric cell -- demo in annex ??)
+        \begin {figure}[H]
+            \centering
+            \includegraphics[width=0.8\textwidth]{images/Undeformed_cubic_periodic/cube_diagonal_periodic.pdf}
+            \caption{}
+            \label{fig:BCC homogenisation}
+        \end{figure}
     \end{itemize}
 
     Give the analytical redults for the BCC / FCC geometries and show that the numerical homogenisation confirms the analytical result
@@ -229,9 +244,28 @@ n_1^3 n_2 & n_1 n_2^3 & n_1 n_2 n_3^2 & n_1 n_2^2 n_3 & n_1^2 n_2 n_3 & \cellcol
     1/ justify the number of bonds per cell in order to be able to solve the system
     Show exemples of deformed cells
     \begin{itemize}
-        \item parallelepiped
-        \item "enlarged"
-        \item sheared -> not working, nit enough orientations
+        \item parallelepiped -> the rank of the matrix is 12 not 15 but still enough to solve the system by "chance"
+        \item \begin {figure}[H]
+            \centering
+            \includegraphics[width=0.8\textwidth]{images/Deformed_hex/parallelepipede_non-periodic.pdf}
+            \caption{}
+            \label{fig:parallelepiped homogenisation}
+        \end{figure}
+        \item "corner" -> the rank is 15 -> can be solved
+        \item \begin {figure}[H]
+            \centering
+            \includegraphics[width=0.8\textwidth]{images/Deformed_hex/angle_non-periodic.pdf}
+            \caption{}
+            \label{fig:corner homogenisation}
+        \end{figure}
+        
+        \item sheared -> not working, not enough orientations (rank 12)
+        \item \begin {figure}[H]
+            \centering
+            \includegraphics[width=0.8\textwidth]{images/Deformed_hex/shear_non-periodic.pdf}
+            \caption{}
+            \label{fig:shear homogenisation}
+        \end{figure}
     \end{itemize}
 
     -> takes a lot of time to solve each cell independently
@@ -240,34 +274,76 @@ n_1^3 n_2 & n_1 n_2^3 & n_1 n_2 n_3^2 & n_1 n_2^2 n_3 & n_1^2 n_2 n_3 & \cellcol
     
 % ============================================================ Deformed hexahedral cell ============================================================
 \section{Mesh of deformed hex -> need a faster parametrisation}
-    \subsection{keeping same parameters}
-    Show that keeping the undeformed parameters doesn't allow to keep isotropy (deformed cells with a ratio 1 X 0.8 X 1.2) - and that we quickly get high anisotropy even for resonable deformations
+    \subsection{problems with the cell by cell calibration}
+
+    3/ show the results are not accurate when we add randomness because we are violating the linear displacement hypothesis -> show the high variation in stiffnesses. 
+    Calibration each cell independently has multiple problems :
     \begin{itemize}
-        \item Calibration of each cell independently
-     3/ show the results are not accurate when we add randomness because we are violating the linear displacement hypothesis -> show the high variation in stiffnesses. 
-
-     \item "Equivalent cell parametrisation"
-     \begin{itemize}
-         \item Explain the idea of the method (how it reduces the variation in stiffness)
-         \item Show the influence of the number of sections. Less sections -> smaller linearity error but higher angle error. 
-
-         \item Flexion test case :
-            Regular meshing OK
-            Change orientaion KO
-            Refinement KO
-             -> Heterogeneity in the orientation repartion and in the density either work on more local parts of the mesh -> hard to automate)
-            
-            
-        \item Flexion test case with a one by one parametrisation
-     \end{itemize}
-        
+        \item The calibration is time consuming (requires to solve a 15x15 system for each cell)
+        \item There is no guarantee that a solution with all positive stiffnesses exists.
+        \item There is no guarantee that a solution exists
+        \item for a hex cell to be solvable it needs 15 different orientations. (in our case we use a coordination number of 22 which is very high)
+        \item The solution indeed gives a perfectly homogenised stress tensor only if the free nodes follow the cauchy rule. 
+        \textcolor{red}{generate the graph that shows the variation in displacement relative to the cauchy Born rule}
     \end{itemize}
+
+    A way to fasten the calibration would be to find a solution that maps the stiffnesses of a reference cell (in the case presented in the "Deformed hex cell" section above the reference cell would be a cubic cell with [100], [110] and [111] bonds)
+    Let's consider a reference configuration with a set of bonds orientations $\xi \in R(24 X 3)$, the deformed orientations can be expressed as a linear combination of the reference configuration.
+    $n = A \xi$ wit A a 24X24 matrix. When introduced in the energy equivalence equation we get a 4th order polynomial of the components of which cannot be solved analytically. Therefore it comes back once again to solving a numerical system for each cell.  
+    \subsection{idea of the equivalen cell parametrisation}
+    Instead of solving each cell independently we require isotropy only at the macroscopic scale. Which asks to solve the energy equivalence equation a single time summing the contribution of all the bonds. However this sytem grows fast with the number of bonds and doesn't garantee any homogeneity of the stiffness through the mesh. Therefor we propose an other methodology with the following steps :
+    \begin{itemize}
+        \item Categorise the bonds depending on their orientation (For that we use Healpix of order 4 -> all categories cover the same section of the sphere)
+        \item compute the mean representative bond of each category
+        \item solve the energy equivalence on this set of equivalent bonds. We solve the following equation :
+        \begin{equation}
+    \mathbb{C} \, V_{total} = \sum_{c \in \textit{bond categories}} k_{eq, c} \,
+    \underline{n}_{eq, c}^{\otimes 4} = \sum_{ij \in \textit{bonds}} k_{ij} \|\mathbf{x}_{ij}\|^2 \,
+    \underline{n}_{ij}^{\otimes 4} \approx \sum_{c \in \textit{bond categories}} \left( \sum_{ij \in \textit{c}} k_{ij} \|\mathbf{x}_{ij}\|^2 \right) \,
+    \underline{n}_{eq, c}^{\otimes 4} 
+    \label{equivalent cell energy match}
+\end{equation}
+        -> the stiffness found here is the stiffness that all the bonds from this category must have together.
+        \begin{equation}
+            k_{eq, c} = \sum_{ij \in \textit{c}} k_{ij} \|\mathbf{x}_{ij}\|^2
+            \label{repartition criteria}
+        \end{equation}
+        \item the equation \eqref{repartition criteria} gives us a rule on the combined stiffness in a given orientation but not on how it should be split between bonds of a same orientation. Although an intuitive choice might be to take the same stiffness for all bonds of the same direction. When refining the mesh that will cause stiffer zones when the bond density is higher. 
+        Let's consider the following situation, a mesh is composed of cells with identical bond orientations but different scales. 
+        \textcolor{red}{include an exemple image with 2 zones}
+        We would like both cells to have the same energy density ie.
+        \begin{equation}
+            \sum_{ij \in \textit{bond cell 1}} \frac{k_{1,ij} \|\mathbf{x}_{1,ij}\|^2}{V_1} \,\underline{n}_{1,ij}^{\otimes 4} = \sum_{ij \in \textit{bond cell 2}} \frac{k_{2,ij} \|\mathbf{x}_{2,ij}\|^2}{V_2} \,\underline{n}_{2,ij}^{\otimes 4}
+        \end{equation}
+        as the orientations are the same ($\underline{n}_{1,ij}^{\otimes 4} = \underline{n}_{2,ij}^{\otimes 4} \forall ij$), by identification we must have :
+        \begin{equation}
+            \frac{k_{1,ij} \|\mathbf{x}_{1,ij}\|^2}{V_1}  = \frac{k_{2,ij} \|\mathbf{x}_{2,ij}\|^2}{V_2}
+        \end{equation}
+
+        We can take this term out of the sum in \eqref{repartition criteria}, resulting in :
+        \begin{equation}
+            k_{ij} = \frac {k_{eq, c} \, V_{cell, ij}}{\|\mathbf{x}_{ij}\|^2 \, \sum_{ij \in c} V_{cell, ij}}   \qquad  \forall ij \in c
+            \label{repartition criteria mis en evidence}
+        \end{equation}
+
+    \end{itemize}
+    \subsection{test of the equivalent cell parametrisation on flexion test case}
+
+         Regular meshing OK
+        Change orientaion KO
+        Refinement KO
+            -> Heterogeneity in the orientation repartion and in the density either work on more local parts of the mesh -> hard to automate)
+
 
 
 % ============================================================ Thetrahedral cell ============================================================
 
 \section{Thetrahedrons}
-    because a tet cell cannot periodically pave the 3D space there is an automatic homogeneity in the repartition of bond throught the mesh (there are no zones where a certain orientation is over - represented) when the cubic model intruduce in homogeneities (which can be problematic for the equivalent cell representation but also influences possible crack paths --> reference articles that highlighted isotropy, homogeneity and boundary conformity as essential conditions)
+    because a tet cell cannot periodically pave the 3D space it will typically show more diversity in orientations.
+     We can therefore assume that all bond categories are represented and each category must have the same combined stiffness.
+     \textcolor{red}{add the demo detail with the sum of fabric tensors already producing isotropy}
+     + reuse the length² / volume proportion. 
+
 
 
 
