@@ -4,12 +4,14 @@ import os
 import sys
 import meshio
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 from test_execution import detect_element_type, read_volume_mesh, element_edges
 
-FIGURES_DIR = "figures"
-DISP_ERR_LIM = 100.0  # fixed color scale of the displacement error plots, in %
+LENGTH_UNIT = "m"  # SI units (E given in Pa in test_execution.py)
+ERR_LIM = 100.0  # fixed color scale -ERR_LIM .. +ERR_LIM % of all error plots, so they can be compared
+FIGURES = []  # (figure, filename) of the current case, written to disk by save_figures
 
 
 def percent(error, reference):
@@ -29,11 +31,43 @@ def l2_error(reference, approx):
     return abs_err, rel_err
 
 
-def save_and_show(fig, dir_name, filename):
+def error_extend(values):
+    # colorbar arrows for values beyond the fixed -ERR_LIM .. +ERR_LIM % scale
+    above = np.nanmax(values) > ERR_LIM
+    below = np.nanmin(values) < -ERR_LIM
+    return {(True, True): "both", (True, False): "max", (False, True): "min"}.get((above, below), "neither")
 
-    os.makedirs(dir_name, exist_ok=True)
-    fig.savefig(os.path.join(dir_name, filename), dpi=300, bbox_inches="tight")
+
+def set_xyz_labels(ax):
+    ax.set_xlabel(f"x ({LENGTH_UNIT})")
+    ax.set_ylabel(f"y ({LENGTH_UNIT})")
+    ax.set_zlabel(f"z ({LENGTH_UNIT})")
+
+
+def set_title(ax, title, short_title=None):
+    # full title for the combined pdf, short title (no numbers) for the individual figure files
+    ax.set_title(title)
+    ax.short_title = short_title if short_title is not None else title
+
+
+def save_and_show(fig, filename):
+    # figures are only collected here, they are written by save_figures once the case is done
+    FIGURES.append((fig, filename))
     fig.show()
+
+
+def save_figures(dir_name, pdf_path):
+    # all figures with their full titles in one pdf, then each figure with its short title in dir_name
+    os.makedirs(dir_name, exist_ok=True)
+    with PdfPages(pdf_path) as pdf:
+        for fig, _ in FIGURES:
+            pdf.savefig(fig, bbox_inches="tight")
+    for fig, filename in FIGURES:
+        for ax in fig.axes:
+            ax.set_title(getattr(ax, "short_title", ""))
+        fig.savefig(os.path.join(dir_name, filename), dpi=300, bbox_inches="tight")
+        plt.close(fig)
+    FIGURES.clear()
 
 
 def plot_displacement(mesh, displacement_fem, displacement_lsm, name="", scale=1.0):
@@ -65,12 +99,10 @@ def plot_displacement(mesh, displacement_fem, displacement_lsm, name="", scale=1
         ax.add_collection3d(Line3DCollection(deformed[edges], colors="gray", linewidths=0.3, alpha=0.6))
         sc = ax.scatter(*deformed.T, c=u_norm, cmap="viridis", vmin=vmin, vmax=vmax, s=8)
         ax.set_box_aspect(np.ptp(deformed, axis=0))
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        ax.set_title(f"{label} deformed mesh (x{scale:.3g})")
-    fig.colorbar(sc, ax=fig.axes, shrink=0.6, label="|u|")
-    save_and_show(fig, FIGURES_DIR, "displacement_deformed.pdf")
+        set_xyz_labels(ax)
+        set_title(ax, f"{label} deformed mesh (x{scale:.3g})", f"{label} deformed mesh")
+    fig.colorbar(sc, ax=fig.axes, shrink=0.6, label=f"|u| ({LENGTH_UNIT})")
+    save_and_show(fig, "displacement_deformed.pdf")
 
     # --- difference FEM - LSM on the undeformed mesh ---
     diff = percent(np.linalg.norm(u_fem - u_lsm, axis=1), u_norm_fem)
@@ -78,16 +110,15 @@ def plot_displacement(mesh, displacement_fem, displacement_lsm, name="", scale=1
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111, projection="3d")
     ax.add_collection3d(Line3DCollection(nodes[edges], colors="gray", linewidths=0.3, alpha=0.5))
-    # white (0 %) to red (DISP_ERR_LIM %), fixed scale; thin gray outline so near-zero-error nodes stay visible on the white background
-    sc = ax.scatter(*nodes.T, c=diff, cmap="Reds", vmin=0, vmax=DISP_ERR_LIM, s=8, edgecolors="lightgray", linewidths=0.2)
-    fig.colorbar(sc, ax=ax, shrink=0.6, extend="max" if np.nanmax(diff) > DISP_ERR_LIM else "neither",
+    # same fixed -ERR_LIM .. +ERR_LIM % scale as the other error plots (this one is always >= 0)
+    sc = ax.scatter(*nodes.T, c=diff, cmap="coolwarm", vmin=-ERR_LIM, vmax=ERR_LIM, s=8)
+    fig.colorbar(sc, ax=ax, shrink=0.6, extend=error_extend(diff),
                  label="|u_FEM - u_LSM| / |u_FEM| (%)")
     ax.set_box_aspect(np.ptp(nodes, axis=0))
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.set_title(f"Displacement difference FEM vs LSM (max = {np.nanmax(diff):.2f} %)")
-    save_and_show(fig, FIGURES_DIR, "displacement_error.pdf")
+    set_xyz_labels(ax)
+    set_title(ax, f"Displacement difference FEM vs LSM (max = {np.nanmax(diff):.2f} %)",
+              "Displacement difference FEM vs LSM")
+    save_and_show(fig, "displacement_error.pdf")
 
     # --- signed error per direction (u_FEM - u_LSM) / |u_FEM| in percent, side by side ---
     diff_xyz = percent(u_fem - u_lsm, u_norm_fem[:, None])
@@ -96,16 +127,14 @@ def plot_displacement(mesh, displacement_fem, displacement_lsm, name="", scale=1
         ax = fig.add_subplot(1, 3, i + 1, projection="3d")
         max_err = np.nanmax(np.abs(diff_xyz[:, i]))
         ax.add_collection3d(Line3DCollection(nodes[edges], colors="gray", linewidths=0.3, alpha=0.5))
-        # fixed symmetric color scale -DISP_ERR_LIM .. +DISP_ERR_LIM %
-        sc = ax.scatter(*nodes.T, c=diff_xyz[:, i], cmap="coolwarm", vmin=-DISP_ERR_LIM, vmax=DISP_ERR_LIM, s=8)
-        fig.colorbar(sc, ax=ax, shrink=0.6, extend="both" if max_err > DISP_ERR_LIM else "neither",
+        # fixed symmetric color scale -ERR_LIM .. +ERR_LIM %
+        sc = ax.scatter(*nodes.T, c=diff_xyz[:, i], cmap="coolwarm", vmin=-ERR_LIM, vmax=ERR_LIM, s=8)
+        fig.colorbar(sc, ax=ax, shrink=0.6, extend=error_extend(diff_xyz[:, i]),
                      label=f"(u{comp}_FEM - u{comp}_LSM) / |u_FEM| (%)")
         ax.set_box_aspect(np.ptp(nodes, axis=0))
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
-        ax.set_title(f"Error in {comp} (max |.| = {max_err:.2f} %)")
-    save_and_show(fig, FIGURES_DIR, "displacement_error_xyz.pdf")
+        set_xyz_labels(ax)
+        set_title(ax, f"Error in {comp} (max |.| = {max_err:.2f} %)", f"Error in {comp}")
+    save_and_show(fig, "displacement_error_xyz.pdf")
 
 
 def plot_elongations(lsm_mesh, displacement_fem, displacement_lsm, name="", scale=1.0):
@@ -146,9 +175,7 @@ def plot_elongations(lsm_mesh, displacement_fem, displacement_lsm, name="", scal
         ax.set_ylim(nodes[:, 1].min(), nodes[:, 1].max())
         ax.set_zlim(nodes[:, 2].min(), nodes[:, 2].max())
         ax.set_box_aspect(np.ptp(nodes, axis=0))
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("z")
+        set_xyz_labels(ax)
         return lc
 
     # --- bond elongations FEM and LSM side by side, same color scale ---
@@ -158,42 +185,39 @@ def plot_elongations(lsm_mesh, displacement_fem, displacement_lsm, name="", scal
     for i, (elong, label) in enumerate([(elongation_fem, "FEM"), (elongation_lsm, "LSM")]):
         ax = fig.add_subplot(1, 2, i + 1, projection="3d")
         lc = add_bonds(ax, elong, "viridis", vmin, vmax)
-        ax.set_title(f"{label} bond elongation")
-    fig.colorbar(lc, ax=fig.axes, shrink=0.6, label="(L - L0) / L0")
-    save_and_show(fig, FIGURES_DIR, "elongation.pdf")
+        set_title(ax, f"{label} bond elongation")
+    fig.colorbar(lc, ax=fig.axes, shrink=0.6, label="(L - L0) / L0 (-)")
+    save_and_show(fig, "elongation.pdf")
 
     # --- difference FEM - LSM per bond ---
     diff = percent(elongation_fem - elongation_lsm, elongation_fem)  # relative difference in percent
     max_err = np.nanmax(np.abs(diff))
-    # symmetric color scale around 0, capped at +-ERR_CAP %: bonds beyond the cap are drawn in black
-    ERR_CAP = 1000.0
-    in_range = np.abs(diff) <= ERR_CAP
-    n_out = np.count_nonzero(np.abs(diff) > ERR_CAP)
-    lim = (np.abs(diff[in_range]).max() if in_range.any() else 0.0) or 1.0
+    # fixed symmetric color scale -ERR_LIM .. +ERR_LIM %: bonds beyond it are drawn in black
+    n_out = np.count_nonzero(np.abs(diff) > ERR_LIM)
     cmap = plt.get_cmap("coolwarm").copy()
     cmap.set_over("black")
     cmap.set_under("black")
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111, projection="3d")
-    lc = add_bonds(ax, diff, cmap, -lim, lim)
-    fig.colorbar(lc, ax=ax, shrink=0.6, extend="both" if n_out else "neither",
+    lc = add_bonds(ax, diff, cmap, -ERR_LIM, ERR_LIM)
+    fig.colorbar(lc, ax=ax, shrink=0.6, extend=error_extend(diff),
                  label="(elongation FEM - LSM) / FEM (%)")
     title = f"Bond elongation difference FEM vs LSM (max |.| = {max_err:.2f} %)"
     if n_out:
-        title += f"\n{n_out} bonds beyond ±{ERR_CAP:.0f} % shown in black"
-    ax.set_title(title)
-    save_and_show(fig, FIGURES_DIR, "elongation_error.pdf")
+        title += f"\n{n_out} bonds beyond ±{ERR_LIM:.0f} % shown in black"
+    set_title(ax, title, "Bond elongation difference FEM vs LSM")
+    save_and_show(fig, "elongation_error.pdf")
 
     # --- LSM vs FEM elongation per bond (points on y = x mean perfect agreement) ---
     fig, ax = plt.subplots(figsize=(6, 6))
     ax.scatter(elongation_fem, elongation_lsm, s=4, alpha=0.5)
     ax.plot([vmin, vmax], [vmin, vmax], "k--", linewidth=1, label="y = x")
-    ax.set_xlabel("FEM elongation")
-    ax.set_ylabel("LSM elongation")
-    ax.set_title("Bond elongation: LSM vs FEM")
+    ax.set_xlabel("FEM elongation (L - L0) / L0 (-)")
+    ax.set_ylabel("LSM elongation (L - L0) / L0 (-)")
+    set_title(ax, "Bond elongation: LSM vs FEM")
     ax.legend()
     ax.set_aspect("equal")
-    save_and_show(fig, FIGURES_DIR, "elongation_lsm_vs_fem.pdf")
+    save_and_show(fig, "elongation_lsm_vs_fem.pdf")
 
     return elongation_fem, elongation_lsm
 
@@ -202,10 +226,10 @@ def plot_elongations(lsm_mesh, displacement_fem, displacement_lsm, name="", scal
 if __name__ == "__main__":
     # usage: python post_processing.py name1 [name2 ...]
     # expects name.msh, name_fem_disp.txt and name_lsm_disp.txt (written by test_execution.py)
-    # all figures are saved in FIGURES_DIR
+    # writes name_all_figures.pdf (all plots with titles) and name_figures/ (one pdf per plot, short titles)
     fd.ModelingSpace("3D")
     for name in sys.argv[1:]:
-        FIGURES_DIR = name+"_figures"
+        figures_dir = name + "_figures"
         elm_type = detect_element_type(name + ".msh")  # hex8 or tet4
         fem_mesh = read_volume_mesh(name + ".msh", elm_type)
         displacement_fem = np.loadtxt(name + "_fem_disp.txt")
@@ -220,9 +244,10 @@ if __name__ == "__main__":
         # L2 errors of LSM with respect to FEM, written next to the figures
         disp_abs, disp_rel = l2_error(displacement_fem, displacement_lsm)
         elong_abs, elong_rel = l2_error(elongation_fem, elongation_lsm)
-        os.makedirs(FIGURES_DIR, exist_ok=True)
-        with open(os.path.join(FIGURES_DIR, "l2_errors.txt"), "w") as f:
+        save_figures(figures_dir, name + "_all_figures.pdf")
+        with open(os.path.join(figures_dir, "l2_errors.txt"), "w") as f:
             f.write(f"# L2 errors of LSM with respect to FEM for {name}\n")
+            f.write(f"# absolute_L2 in {LENGTH_UNIT} for displacement, dimensionless (-) for elongation\n")
             f.write(f"# quantity      absolute_L2      relative_L2 (%)\n")
             f.write(f"displacement    {disp_abs:.6e}     {disp_rel:.6f}\n")
             f.write(f"elongation      {elong_abs:.6e}     {elong_rel:.6f}\n")
