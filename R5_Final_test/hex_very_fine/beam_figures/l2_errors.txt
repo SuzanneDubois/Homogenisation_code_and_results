@@ -1,0 +1,5 @@
+# L2 errors of LSM with respect to FEM for R5_Final_test/hex_very_fine/beam
+# absolute_L2 in m for displacement, dimensionless (-) for elongation
+# quantity      absolute_L2      relative_L2 (%)
+displacement    1.418498e-01     63.654871
+elongation      5.685615e-03     61.341721

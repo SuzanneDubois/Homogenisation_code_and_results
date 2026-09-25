@@ -1,0 +1,5 @@
+# L2 errors of LSM with respect to FEM for R5_Final_test/tet_coarse/beam
+# absolute_L2 in m for displacement, dimensionless (-) for elongation
+# quantity      absolute_L2      relative_L2 (%)
+displacement    1.998576e-02     70.551960
+elongation      1.255852e-03     108.938632
