@@ -76,7 +76,7 @@ def plot_displacement_vs_coord(pb, mesh, i, j, ax=None, title=None, boundary_nod
 
     if u_expected is not None:
         ax.plot(coord_sorted, u_expected[order, i],
-                color='gray', linewidth=2, zorder=1, label='expected linear')
+                color='gray', linewidth=2, zorder=1, label='Cauchy-Born (linear)')
 
     ax.scatter(nodes[~is_boundary, j], U[i, ~is_boundary],
                s=12, alpha=0.7, color='royalblue', zorder=2, label='interior')
@@ -93,12 +93,34 @@ def plot_displacement_vs_coord(pb, mesh, i, j, ax=None, title=None, boundary_nod
 
     ax.set_xlabel(f'${labels[j]}$ coordinate (m)')
     ax.set_ylabel(f'$u_{{{labels[i]}}}$ (m)')
-    ax.set_title(title or f'$u_{{{labels[i]}}}$ vs ${labels[j]}$')
+    ax.set_title(title if title is not None else f'$u_{{{labels[i]}}}$ vs ${labels[j]}$')
     ax.legend()
 
     #plt.show()
 
     return ax, error
+
+
+def save_displacement_plot(pb, mesh, i, j, boundary_nodes, u_expected, test_label,
+                           plot_dir, overview_ax=None):
+    """
+    Save the plot of the nodal displacement u_i vs x_j against the
+    Cauchy-Born (linear) displacement to {plot_dir}/displacement_{test_label}.pdf
+    (no title), and optionally draw it (with a title) on overview_ax.
+    """
+    labels = ['x', 'y', 'z']
+    title = f'{test_label}: $u_{{{labels[i]}}}$ vs ${labels[j]}$'
+
+    fig_i, ax_i = plt.subplots(figsize=(6, 4))
+    plot_displacement_vs_coord(pb, mesh, i, j, ax=ax_i, title="", boundary_nodes=boundary_nodes,
+                               u_expected=u_expected)
+    fig_i.savefig(os.path.join(plot_dir, f"displacement_{test_label.replace(' ', '_')}.pdf"),
+                  bbox_inches='tight')
+    plt.close(fig_i)
+
+    if overview_ax is not None:
+        plot_displacement_vs_coord(pb, mesh, i, j, ax=overview_ax, title=title,
+                                   boundary_nodes=boundary_nodes, u_expected=u_expected)
 
 
 #=============================================================== ERROR HELPERS ===============================================================
@@ -366,10 +388,10 @@ def apply_kubc(pb, mesh, eps_bar, basename=None):
     nodes = mesh.nodes
     boundary_nodes = get_boundary_nodes(mesh, basename)
     print(f"Applying KUBC to {len(boundary_nodes)} boundary nodes.")
-    
+
     x0 = nodes[boundary_nodes]          # reference positions (N_bnd x 3)
     u_imposed = (eps_bar @ x0.T).T      # u_i = eps_bar_ij * x_j  →  (N_bnd x 3)
-    
+
     pb.bc.add('Dirichlet', boundary_nodes, 'DispX', u_imposed[:, 0])
     pb.bc.add('Dirichlet', boundary_nodes, 'DispY', u_imposed[:, 1])
     pb.bc.add('Dirichlet', boundary_nodes, 'DispZ', u_imposed[:, 2])
@@ -450,7 +472,8 @@ def setup_spring_problem(filename):
     return mesh, assembly_name
 
 
-def traction_test(filename, mesh, assembly_name, traction=0.1, direction="z", plot=False):
+def traction_test(filename, mesh, assembly_name, traction=0.1, direction="z", plot=False,
+                  plot_dir=None, overview_ax=None):
 
     pb = fd.problem.Linear(assembly_name)
 
@@ -499,17 +522,14 @@ def traction_test(filename, mesh, assembly_name, traction=0.1, direction="z", pl
     linearity_error = compute_linearity_error(U_full.T, u_expected)
 
     if plot:
-        if direction == "x":
-            plot_displacement_vs_coord(pb, mesh, i=0, j=0, title=f"u_x vs x (traction {traction})", boundary_nodes=boundary_nodes, u_expected=u_expected)
-        elif direction == "y":
-            plot_displacement_vs_coord(pb, mesh, i=1, j=1, title=f"u_y vs y (traction {traction})", boundary_nodes=boundary_nodes, u_expected=u_expected)
-        else:
-            plot_displacement_vs_coord(pb, mesh, i=2, j=2, title=f"u_z vs z (traction {traction})", boundary_nodes=boundary_nodes, u_expected=u_expected)
+        save_displacement_plot(pb, mesh, col, col, boundary_nodes, u_expected,
+                               f"traction {direction}", plot_dir, overview_ax)
 
     return stiffness, linearity_error
 
 
-def shear_test(filename, mesh, assembly_name, shear=0.1, direction="yz", plot=False):
+def shear_test(filename, mesh, assembly_name, shear=0.1, direction="yz", plot=False,
+               plot_dir=None, overview_ax=None):
 
     pb = fd.problem.Linear(assembly_name)
 
@@ -538,13 +558,13 @@ def shear_test(filename, mesh, assembly_name, shear=0.1, direction="yz", plot=Fa
         raise ValueError("direction must be 'yz', 'xz' or 'xy'")
 
     L = nodes[:, normal_col].max() - nodes[:, normal_col].min()
-    gamma = shear / L         
-    eps_ij = gamma       
+    gamma = shear / L
+    eps_ij = gamma
 
     # --- Macroscopic strain tensor ---
     eps_bar = np.zeros((3, 3))
     eps_bar[slide_col, normal_col] = eps_ij
- 
+
     # --- Boundary conditions ---
     if BC == "pbc":
         bc_periodic = apply_pbc(pb, mesh, eps_bar, basename=filename)
@@ -574,12 +594,8 @@ def shear_test(filename, mesh, assembly_name, shear=0.1, direction="yz", plot=Fa
     linearity_error = compute_linearity_error(U_full.T, u_expected)
 
     if plot:
-        if direction == "yz":
-            plot_displacement_vs_coord(pb, mesh, i=1, j=2, title=f"u_y vs z (shear {shear})", boundary_nodes=boundary_nodes, u_expected=u_expected)
-        elif direction == "xz":
-            plot_displacement_vs_coord(pb, mesh, i=0, j=2, title=f"u_x vs z (shear {shear})", boundary_nodes=boundary_nodes, u_expected=u_expected)
-        elif direction == "xy":
-            plot_displacement_vs_coord(pb, mesh, i=0, j=1, title=f"u_x vs y (shear {shear})", boundary_nodes=boundary_nodes, u_expected=u_expected)
+        save_displacement_plot(pb, mesh, slide_col, normal_col, boundary_nodes, u_expected,
+                               f"shear {direction}", plot_dir, overview_ax)
 
     return stiffness, linearity_error
 
@@ -608,13 +624,29 @@ def get_stiffness_matrix(filename, traction=0.1, shear=0.1, plot=False):
     """
     mesh, assembly_name = setup_spring_problem(filename)
 
-    c1, e1 = traction_test(filename, mesh, assembly_name, traction=traction, direction="x", plot=True)
-    c2, e2 = traction_test(filename, mesh, assembly_name, traction=traction, direction="y", plot=True)
-    c3, e3 = traction_test(filename, mesh, assembly_name, traction=traction, direction="z", plot=True)
+    # --- Displacement vs Cauchy-Born plots: one pdf per test + a 2x3 overview ---
+    plot_dir = f"{filename}_plots"
+    if plot:
+        os.makedirs(plot_dir, exist_ok=True)
+        fig_disp, ax_disp = plt.subplots(2, 3, figsize=(24, 12))
+        overview_axes = ax_disp.flat
+    else:
+        overview_axes = iter([None] * 6)
 
-    c4, e4 = shear_test(filename, mesh, assembly_name, shear=shear, direction="yz", plot=True)
-    c5, e5 = shear_test(filename, mesh, assembly_name, shear=shear, direction="xz", plot=True)
-    c6, e6 = shear_test(filename, mesh, assembly_name, shear=shear, direction="xy", plot=True)
+    c1, e1 = traction_test(filename, mesh, assembly_name, traction=traction, direction="x", plot=plot, plot_dir=plot_dir, overview_ax=next(overview_axes))
+    c2, e2 = traction_test(filename, mesh, assembly_name, traction=traction, direction="y", plot=plot, plot_dir=plot_dir, overview_ax=next(overview_axes))
+    c3, e3 = traction_test(filename, mesh, assembly_name, traction=traction, direction="z", plot=plot, plot_dir=plot_dir, overview_ax=next(overview_axes))
+
+    c4, e4 = shear_test(filename, mesh, assembly_name, shear=shear, direction="yz", plot=plot, plot_dir=plot_dir, overview_ax=next(overview_axes))
+    c5, e5 = shear_test(filename, mesh, assembly_name, shear=shear, direction="xz", plot=plot, plot_dir=plot_dir, overview_ax=next(overview_axes))
+    c6, e6 = shear_test(filename, mesh, assembly_name, shear=shear, direction="xy", plot=plot, plot_dir=plot_dir, overview_ax=next(overview_axes))
+
+    if plot:
+        fig_disp.suptitle(f"Nodal displacements vs Cauchy-Born rule ({BC})", fontsize=16)
+        fig_disp.tight_layout()
+        fig_disp.savefig(os.path.join(plot_dir, "displacements_vs_cauchy_born.pdf"))
+        plt.close(fig_disp)
+        print(f"Saved displacement vs Cauchy-Born plots to {plot_dir}/")
 
     c4_bis, e4_bis = shear_test(filename, mesh, assembly_name, shear=shear, direction="zy", plot=False)
     c5_bis, e5_bis = shear_test(filename, mesh, assembly_name, shear=shear, direction="zx", plot=False)
@@ -847,7 +879,9 @@ if __name__ == '__main__':
     print(f"Max linearity error over all tests: {max_linearity_error:.4%}")
 
     # --- Write both errors to (filename)_errors.txt ---
+    rve_mesh = fd.Mesh.get_all()['Domain']
     with open(f"{filename}_errors.txt", "w") as f:
+        f.write(f"Number of nodes: {rve_mesh.n_nodes}, number of bonds (springs): {rve_mesh.n_elements}\n")
         f.write(f"Isotropy error vs reference (E={YoungModulus:.6g}, nu={PoissonRatio}): {isotropy_error:.6e}\n")
         f.write("Linearity errors per test:\n")
         for direction, err in linearity_errors.items():
